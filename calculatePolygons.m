@@ -15,7 +15,7 @@
 % ];
 
 % Laden Sie das Bild
-img = imread('Datensatz\oil-painting.png');
+img = imread('oil-painting.png');
 
 vertices = threed_points.';
 
