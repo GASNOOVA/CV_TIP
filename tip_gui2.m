@@ -26,6 +26,8 @@ function tip_gui
     
         % Start animation button (bottom right corner)
     uibutton(fig, 'Position', [40, 10, 150, 30], 'Text', 'Tour into the Picture!', 'ButtonPushedFcn', @(btn, event) startAnimation(fig));
+     % Reset button
+    uibutton(fig, 'Position', [200, 10, 100, 30], 'Text', 'Reset', 'ButtonPushedFcn', @(btn, event) resetApp(fig));
 end
 
 function loadImage(fig)
@@ -254,6 +256,20 @@ function startAnimation(fig)
     rotate3d(ax, 'on');
 end
 
-
+function resetApp(fig)
+    % Clear all app data
+    rmappdata(fig, 'Image');
+    rmappdata(fig, 'VanishingPoint');
+    rmappdata(fig, 'InnerRectangle');
+    rmappdata(fig, 'VanishingPointHandle');
+    rmappdata(fig, 'MeshLines');
+    rmappdata(fig, 'RectangleHandle');
+    
+    % Close the figure
+    delete(fig);
+    
+    % Re-open the GUI
+    tip_gui2;
+end
 
 
