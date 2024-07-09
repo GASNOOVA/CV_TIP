@@ -318,6 +318,7 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     
     intersections = [intersection_tl_left, intersection_tl_top, intersection_tr_right, intersection_tr_top, intersection_br_right, intersection_br_bottom, intersection_bl_left, intersection_bl_bottom];
     
+    
     threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
     threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
     
@@ -361,15 +362,35 @@ function intersection_with_border = intersection_with_image_border(vanishing_poi
     intersection_with_border = vanishing_point + t(1) * direction;
 end
 
+function [model, inlierIdx] = fitLineRANSAC(points, tolerance)
+    % Fit line using RANSAC to better handle outliers
+    [model, inlierIdx] = ransac(points, @(x) polyfit(x(:,1), x(:,2), 1), ...
+        @(model, points) abs(polyval(model, points(:,1)) - points(:,2)) < tolerance, ...
+        size(points,1), 0.5 * size(points, 1));  % Adjust iterations and sample count as needed
+end
+
+function edgeDensity = calculateEdgeDensity(edges, windowSize)
+    % Calculate the local density of edge pixels within a window
+    % Create a window with all ones
+    window = ones(windowSize, windowSize);
+    
+    % Use convolution to count the number of edge pixels in the neighborhood
+    edgeCounts = conv2(double(edges), window, 'same');
+    
+    % Normalize by the area of the window to get density
+    edgeDensity = edgeCounts / (windowSize * windowSize);
+end
+
 function [min_distance] = minDistance(v1, r1, v2, r2)
-    min_distance = min(norm(v1-r1), norm(v2-r2));
+    min_distance=min(norm(v1-r1), norm(v2-r2))
 end
 
 function [point] = ninetyDegreePoint(startingPoint, originalDirection, distance)
-    unitOriginalDirection = originalDirection / norm(originalDirection);
-    newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance;
-    point = startingPoint + newDirection;
+    unitOriginalDirection = originalDirection / norm(originalDirection)
+    newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance
+    point = startingPoint + newDirection
 end
+
 
 function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections)
     % Trenne die Mittelpunkte und Randpunkte aus der Intersections-Matrix
@@ -399,11 +420,11 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     % Grueuee des rechteckigen Ausgabebildes 
 
     face_mapping = {
-        [4 3 1 2];  % Boden
-        [1 3 4 2];  % Rechte Wand
-        [3 1 2 4];  % Linke Wand
-        [3 4 2 1];  % Rueckwand
-        [4 3 1 2];  % Decke
+        [4 3 1 2];       % Boden
+        [1 3 4 2];      % Rechte Wand
+        [3 1 2 4];       % Linke Wand
+        [3 4 2 1];       % Rueckwand
+        [4 3 1 2];     % Decke
     };
 
     % Schneide, transformiere und speichere jedes Segment
@@ -412,7 +433,7 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         source_points = segments{i};
         
         % Definiere die Zielpunkte (Eckpunkte des Rechtecks)
-        output_width_and_height_for_item = [round(output_width_and_height{i}(1)); round(output_width_and_height{i}(2))];
+        output_width_and_height_for_item = [round(output_width_and_height{i}(1)); round(output_width_and_height{i}(2))]
         dest_points = [
             0, 0;
             output_width_and_height_for_item(1), 0;
@@ -420,7 +441,7 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
             0, output_width_and_height_for_item(2)
         ];
 
-        new_dest_points = zeros(size(dest_points));
+        new_dest_points = zeros(size(dest_points))
         for j = 1:4
             new_dest_points(face_mapping{i}(j), :) = dest_points(j,:);
         end
@@ -431,12 +452,18 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         % Wende die Transformation an
         transformed_img = imwarp(img, tform, 'OutputView', imref2d([output_width_and_height_for_item(2) output_width_and_height_for_item(1)]));
         
+        % Spiegele das transformierte Bild horizontal
+        %if i==2 || i==4
+        %    transformed_img = flip(transformed_img, 2);
+        %end
+        
         % Speichere das gespiegelte Bild
         transformed_segment_images{i} = transformed_img;
     end
+
     
-    transformed_segment_images{1} = flip(transformed_segment_images{1}, 2);
-    transformed_segment_images{3} = flip(transformed_segment_images{3}, 2);
+    transformed_segment_images{1} = flip(transformed_segment_images{1}, 2)
+    transformed_segment_images{3} = flip(transformed_segment_images{3}, 2)
     transformed_segment_images{4} = imrotate(transformed_segment_images{4}, 270);
     transformed_segment_images{5} = imrotate(transformed_segment_images{5}, 270);
     transformed_segment_images{5} = flip(transformed_segment_images{5}, 1);
@@ -459,6 +486,15 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         [2 1 4 3];       % Rueckwand
         [3 4 12 10];     % Decke
     };
+    %{
+    faces = {
+        [2 1 6 8];       % Boden
+        [3 11 5 1];      % Rechte Wand
+        [9 4 2 7];       % Linke Wand
+        [4 3 1 2];       % Rueckwand
+        [10 12 3 4];     % Decke
+    };
+    %}
 
     % Definiere die Zuordnung der transformierten Bilder zu den Fluechen
     image_to_face_mapping = [1, 2, 3, 4, 5]; 
@@ -466,14 +502,12 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     % Erstelle das Patch-Objekt mit Texturabbildung
     ax = getappdata(fig, 'BackgroundAxes');
 
-    % Camera parameters for animation
-    camera_position = [0, 0, -1000];
-    view_angle = 30;
-
     % Clear the axes and plot the initial view
     cla(ax);
     
     hold(ax, 'on');
+    ax.Clipping = 'off';
+    ax.SortMethod = 'childorder';
 
     for i = 1:length(faces)
         % Hole die Eckpunkte fuer die aktuelle Flueche
@@ -498,10 +532,12 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     end
     
     %campos(ax, camera_position);
-    %camva(ax, view_angle);
+    %camva(ax, 90);
     hold(ax, 'off');
 
     % Enable 3D rotation for navigation
+    view(ax, 0, 0);
+    axis(ax, 'vis3d');
+    zoom(ax, "on");
     rotate3d(ax, 'on');
-
 end

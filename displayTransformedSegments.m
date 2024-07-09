@@ -108,14 +108,12 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     % Erstelle das Patch-Objekt mit Texturabbildung
     ax = getappdata(fig, 'BackgroundAxes');
 
-    % Camera parameters for animation
-    camera_position = [0, 0, -1000];
-    view_angle = 30;
-
     % Clear the axes and plot the initial view
     cla(ax);
     
     hold(ax, 'on');
+    ax.Clipping = 'off';
+    ax.SortMethod = 'childorder';
 
     for i = 1:length(faces)
         % Hole die Eckpunkte fuer die aktuelle Flueche
@@ -140,12 +138,12 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     end
     
     %campos(ax, camera_position);
-    %camva(ax, view_angle);
+    %camva(ax, 90);
     hold(ax, 'off');
 
     % Enable 3D rotation for navigation
+    view(ax, 0, 0);
+    axis(ax, 'vis3d');
+    zoom(ax, "on");
     rotate3d(ax, 'on');
-
-    % Aktualisiere das Diagramm
-    %view(3);
 end

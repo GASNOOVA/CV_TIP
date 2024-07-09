@@ -32,9 +32,6 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     
     intersections = [intersection_tl_left, intersection_tl_top, intersection_tr_right, intersection_tr_top, intersection_br_right, intersection_br_bottom, intersection_bl_left, intersection_bl_bottom];
     
-    plot(intersections(1,:), intersections(2,:), 'r*', 'LineWidth', 10); % Display the selected corners
-    hold on;
-    imshow(img)
     
     threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
     threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
