@@ -295,15 +295,15 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     end_x = size(img, 2);
     end_y = size(img, 1);
     
-    % Calculating the vectors
+    % Berechnung zu der inner rectangle
     vector_top_left = [rectangle_x(1)-vanishing_point_x; rectangle_y(1)-vanishing_point_y];
     vector_top_right = [rectangle_x(2)-vanishing_point_x; rectangle_y(2)-vanishing_point_y];
-    
     vector_bottom_right = [rectangle_x(3)-vanishing_point_x; rectangle_y(3)-vanishing_point_y];
     vector_bottom_left = [rectangle_x(4)-vanishing_point_x; rectangle_y(4)-vanishing_point_y];
     
     vanishing_point = [vanishing_point_x; vanishing_point_y];
     
+    % Schnittpunkte mit den Bildrändern
     intersection_tl_left = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [0; 1]);
     intersection_tl_top = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [1; 0]);
     
@@ -318,29 +318,36 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     
     intersections = [intersection_tl_left, intersection_tl_top, intersection_tr_right, intersection_tr_top, intersection_br_right, intersection_br_bottom, intersection_bl_left, intersection_bl_bottom];
     
-    
+    % Start with the bottom corners
     threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
     threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
     
+    % calculate the height based on the rectangle points (minimum)
     height = minDistance([rectangle_x(1); rectangle_y(1)], [rectangle_x(4); rectangle_y(4)], [rectangle_x(2); rectangle_y(2)], [rectangle_x(3); rectangle_y(3)]);
     
+    % calculate the top rectangle corners in 3D
     threed_rectangle_top_left = [threed_rectangle_bottom_left(1); height; threed_rectangle_bottom_left(3)];
     threed_rectangle_top_right = [threed_rectangle_bottom_right(1); height; threed_rectangle_bottom_right(3)];
     
+    % get the distances of the side layers
     distance_bottom = minDistance([intersection_br_bottom(1); intersection_br_bottom(2)], [rectangle_x(3); rectangle_y(3)], [intersection_bl_bottom(1); intersection_bl_bottom(2)], [rectangle_x(4); rectangle_y(4)]);
     distance_top = minDistance([intersection_tr_top(1); intersection_tr_top(2)], [rectangle_x(2); rectangle_y(2)], [intersection_tl_top(1); intersection_tl_top(2)], [rectangle_x(1); rectangle_y(1)]);
     distance_left = minDistance([intersection_tl_left(1); intersection_tl_left(2)], [rectangle_x(1); rectangle_y(1)],[intersection_bl_left(1); intersection_bl_left(2)], [rectangle_x(4); rectangle_y(4)]);
     distance_right = minDistance([intersection_tr_right(1); intersection_tr_right(2)], [rectangle_x(2); rectangle_y(2)],[intersection_br_right(1); intersection_br_right(2)], [rectangle_x(3); rectangle_y(3)]);
     
+    % calculate left corners
     threed_intersection_tl_left = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
     threed_intersection_bl_left = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
     
+    % calculate right corners
     threed_intersection_tr_right = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
     threed_intersection_br_right = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
     
+    % calculate top corners
     threed_intersection_tl_top = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
     threed_intersection_tr_top = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
     
+    % calculate bottom corners
     threed_intersection_bl_bottom = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
     threed_intersection_br_bottom = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
     
@@ -351,34 +358,12 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
 end
 
 function intersection_with_border = intersection_with_image_border(vanishing_point, direction, border_point, border_direction)
-    % Construct the system of equations
     A = [direction(:), -border_direction(:)];
     b = border_point(:) - vanishing_point(:);
     
-    % Solve the system of linear equations
     t = A \ b;
     
-    % Calculate the intersection point
     intersection_with_border = vanishing_point + t(1) * direction;
-end
-
-function [model, inlierIdx] = fitLineRANSAC(points, tolerance)
-    % Fit line using RANSAC to better handle outliers
-    [model, inlierIdx] = ransac(points, @(x) polyfit(x(:,1), x(:,2), 1), ...
-        @(model, points) abs(polyval(model, points(:,1)) - points(:,2)) < tolerance, ...
-        size(points,1), 0.5 * size(points, 1));  % Adjust iterations and sample count as needed
-end
-
-function edgeDensity = calculateEdgeDensity(edges, windowSize)
-    % Calculate the local density of edge pixels within a window
-    % Create a window with all ones
-    window = ones(windowSize, windowSize);
-    
-    % Use convolution to count the number of edge pixels in the neighborhood
-    edgeCounts = conv2(double(edges), window, 'same');
-    
-    % Normalize by the area of the window to get density
-    edgeDensity = edgeCounts / (windowSize * windowSize);
 end
 
 function [min_distance] = minDistance(v1, r1, v2, r2)
@@ -386,6 +371,8 @@ function [min_distance] = minDistance(v1, r1, v2, r2)
 end
 
 function [point] = ninetyDegreePoint(startingPoint, originalDirection, distance)
+    % calculate ninety degree point given startingPpoint, and orginal
+    % direction
     unitOriginalDirection = originalDirection / norm(originalDirection)
     newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance
     point = startingPoint + newDirection
@@ -452,11 +439,6 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         % Wende die Transformation an
         transformed_img = imwarp(img, tform, 'OutputView', imref2d([output_width_and_height_for_item(2) output_width_and_height_for_item(1)]));
         
-        % Spiegele das transformierte Bild horizontal
-        %if i==2 || i==4
-        %    transformed_img = flip(transformed_img, 2);
-        %end
-        
         % Speichere das gespiegelte Bild
         transformed_segment_images{i} = transformed_img;
     end
@@ -486,15 +468,6 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         [2 1 4 3];       % Rueckwand
         [3 4 12 10];     % Decke
     };
-    %{
-    faces = {
-        [2 1 6 8];       % Boden
-        [3 11 5 1];      % Rechte Wand
-        [9 4 2 7];       % Linke Wand
-        [4 3 1 2];       % Rueckwand
-        [10 12 3 4];     % Decke
-    };
-    %}
 
     % Definiere die Zuordnung der transformierten Bilder zu den Fluechen
     image_to_face_mapping = [1, 2, 3, 4, 5]; 
