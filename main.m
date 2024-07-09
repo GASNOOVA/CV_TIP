@@ -78,11 +78,10 @@ function selectForeground(fig)
     % Initialize the foreground image as fully transparent (all zeros)
     foregroundImage = zeros(size(img), 'like', img);
 
-    % 检查foregroundPositions是否已初始化
     if isappdata(fig, 'ForegroundPositions')
         foregroundPositions = getappdata(fig, 'ForegroundPositions');
     else
-        foregroundPositions = [];  % 初始化为空矩阵
+        foregroundPositions = [];
         setappdata(fig, 'ForegroundPositions', foregroundPositions);
     end
     
@@ -129,7 +128,7 @@ function selectForeground(fig)
     setappdata(fig, 'Image', compositeBackground);
     setappdata(fig, 'Masks', masks);
     setappdata(fig, 'ForegroundImage', foregroundImage);
-    setappdata(fig, 'ForegroundPositions', foregroundPositions);  % 存储更新的前景位置信息
+    setappdata(fig, 'ForegroundPositions', foregroundPositions);
 end
 
 %% 3.Determine the Vanishing Point and Inner Rectangle
