@@ -264,28 +264,244 @@ function [x_inter, y_inter] = getBoundaryIntersections(vp_x, vp_y, corner_x, cor
     end
 end
 
-%% Foreground projection
-function projectForeground(fig)
-    ax = getappdata(fig, 'BackgroundAxes');
+%% Tour into the Picture
+function startAnimation(fig)
     img = getappdata(fig, 'Image');
-    foreground = getappdata(fig, 'ForegroundImage');
     vanishingPoint = getappdata(fig, 'VanishingPoint');
     innerRectangle = getappdata(fig, 'InnerRectangle');
 
-    if isempty(img) || isempty(foreground) || isempty(vanishingPoint) || isempty(innerRectangle)
-        uialert(fig, 'Please ensure an image, foreground, vanishing point, and inner rectangle are all set.', 'Error');
+    if isempty(img) || isempty(vanishingPoint) || isempty(innerRectangle)
+        uialert(fig, 'Please load image, select vanishing point, and draw inner rectangle.', 'Error');
         return;
     end
 
-    % compute prespective Transform
-    tform = computePerspectiveTransform(vanishingPoint, innerRectangle, size(img));
-    transformedForeground = imwarp(foreground, tform, 'OutputView', imref2d(size(img)));
+    % Create spidery mesh based on inner rectangle and vanishing point
+    rect_x = innerRectangle(1);
+    rect_y = innerRectangle(2);
+    rect_w = innerRectangle(3);
+    rect_h = innerRectangle(4);
+    vanishing_x = vanishingPoint(1);
+    vanishing_y = vanishingPoint(2);
 
-    % generate a mask to combine the foreground and backfround
-    mask = transformedForeground(:, :, 1) > 0 | transformedForeground(:, :, 2) > 0 | transformedForeground(:, :, 3) > 0;
-    img(mask) = transformedForeground(mask);
+    rectangle_x = [rect_x; rect_x+rect_w; rect_x+rect_w; rect_x];
+    rectangle_y = [rect_y; rect_y; rect_y+rect_h; rect_y+rect_h];
 
-    % display combined Image
-    imshow(img, 'Parent', ax);
-    setappdata(fig, 'Image', img);
+    animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_x, vanishing_y);
+end
+
+
+function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanishing_point_y)
+    
+    end_x = size(img, 2);
+    end_y = size(img, 1);
+    
+    % Calculating the vectors
+    vector_top_left = [rectangle_x(1)-vanishing_point_x; rectangle_y(1)-vanishing_point_y];
+    vector_top_right = [rectangle_x(2)-vanishing_point_x; rectangle_y(2)-vanishing_point_y];
+    
+    vector_bottom_right = [rectangle_x(3)-vanishing_point_x; rectangle_y(3)-vanishing_point_y];
+    vector_bottom_left = [rectangle_x(4)-vanishing_point_x; rectangle_y(4)-vanishing_point_y];
+    
+    vanishing_point = [vanishing_point_x; vanishing_point_y];
+    
+    intersection_tl_left = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [0; 1]);
+    intersection_tl_top = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [1; 0]);
+    
+    intersection_tr_right = intersection_with_image_border(vanishing_point, vector_top_right, [end_x; 0], [0; 1]);
+    intersection_tr_top = intersection_with_image_border(vanishing_point, vector_top_right, [end_x; 0], [1; 0]);
+    
+    intersection_br_right = intersection_with_image_border(vanishing_point, vector_bottom_right, [end_x; end_y], [0; 1]);
+    intersection_br_bottom = intersection_with_image_border(vanishing_point, vector_bottom_right, [end_x; end_y], [1; 0]);
+    
+    intersection_bl_left = intersection_with_image_border(vanishing_point, vector_bottom_left, [0; end_y], [0; 1]);
+    intersection_bl_bottom = intersection_with_image_border(vanishing_point, vector_bottom_left, [0; end_y], [1; 0]);
+    
+    intersections = [intersection_tl_left, intersection_tl_top, intersection_tr_right, intersection_tr_top, intersection_br_right, intersection_br_bottom, intersection_bl_left, intersection_bl_bottom];
+    
+    threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
+    threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
+    
+    height = minDistance([rectangle_x(1); rectangle_y(1)], [rectangle_x(4); rectangle_y(4)], [rectangle_x(2); rectangle_y(2)], [rectangle_x(3); rectangle_y(3)]);
+    
+    threed_rectangle_top_left = [threed_rectangle_bottom_left(1); height; threed_rectangle_bottom_left(3)];
+    threed_rectangle_top_right = [threed_rectangle_bottom_right(1); height; threed_rectangle_bottom_right(3)];
+    
+    distance_bottom = minDistance([intersection_br_bottom(1); intersection_br_bottom(2)], [rectangle_x(3); rectangle_y(3)], [intersection_bl_bottom(1); intersection_bl_bottom(2)], [rectangle_x(4); rectangle_y(4)]);
+    distance_top = minDistance([intersection_tr_top(1); intersection_tr_top(2)], [rectangle_x(2); rectangle_y(2)], [intersection_tl_top(1); intersection_tl_top(2)], [rectangle_x(1); rectangle_y(1)]);
+    distance_left = minDistance([intersection_tl_left(1); intersection_tl_left(2)], [rectangle_x(1); rectangle_y(1)],[intersection_bl_left(1); intersection_bl_left(2)], [rectangle_x(4); rectangle_y(4)]);
+    distance_right = minDistance([intersection_tr_right(1); intersection_tr_right(2)], [rectangle_x(2); rectangle_y(2)],[intersection_br_right(1); intersection_br_right(2)], [rectangle_x(3); rectangle_y(3)]);
+    
+    threed_intersection_tl_left = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
+    threed_intersection_bl_left = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
+    
+    threed_intersection_tr_right = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
+    threed_intersection_br_right = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
+    
+    threed_intersection_tl_top = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
+    threed_intersection_tr_top = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
+    
+    threed_intersection_bl_bottom = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
+    threed_intersection_br_bottom = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
+    
+    
+    threed_points = [threed_rectangle_bottom_right, threed_rectangle_bottom_left, threed_rectangle_top_right, threed_rectangle_top_left, threed_intersection_br_right, threed_intersection_br_bottom, threed_intersection_bl_left, threed_intersection_bl_bottom, threed_intersection_tl_left, threed_intersection_tl_top, threed_intersection_tr_right, threed_intersection_tr_top];
+    
+    displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections);
+end
+
+function intersection_with_border = intersection_with_image_border(vanishing_point, direction, border_point, border_direction)
+    % Construct the system of equations
+    A = [direction(:), -border_direction(:)];
+    b = border_point(:) - vanishing_point(:);
+    
+    % Solve the system of linear equations
+    t = A \ b;
+    
+    % Calculate the intersection point
+    intersection_with_border = vanishing_point + t(1) * direction;
+end
+
+function [min_distance] = minDistance(v1, r1, v2, r2)
+    min_distance = min(norm(v1-r1), norm(v2-r2));
+end
+
+function [point] = ninetyDegreePoint(startingPoint, originalDirection, distance)
+    unitOriginalDirection = originalDirection / norm(originalDirection);
+    newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance;
+    point = startingPoint + newDirection;
+end
+
+function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections)
+    % Trenne die Mittelpunkte und Randpunkte aus der Intersections-Matrix
+    center_points = [rectangle_x rectangle_y];
+    
+    % Definiere die Polygon-Eckpunkte fuer jedes Segment
+    segments = {
+        [intersections(:,8)'; center_points(4,:); center_points(3,:); intersections(:,6)']; % bottom
+        [center_points(2,:); intersections(:,3)'; intersections(:,5)'; center_points(3,:)]; % right
+        [intersections(:,1)'; center_points(1,:); center_points(4,:); intersections(:,7)']; % left
+        center_points; % back
+        [intersections(:,2)'; intersections(:,4)'; center_points(2,:); center_points(1,:)]; % top
+    };
+
+    output_width_and_height = {
+        [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(3,6)-threed_points(3,1))]; % bottom
+        [norm(threed_points(3,5)-threed_points(3,1)); norm(threed_points(2,1)-threed_points(2,3))]; % right
+        [norm(threed_points(3,7)-threed_points(3,2)); norm(threed_points(2,1)-threed_points(2,3))]; % left
+        [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(2,1)-threed_points(2,3))]; % back
+        [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(3,3)-threed_points(3,11))]; % top
+        
+    };
+
+    % Initialisiere Zellarray zur Speicherung jedes transformierten Segmentbildes
+    transformed_segment_images = cell(length(segments), 1);
+
+    % Grueuee des rechteckigen Ausgabebildes 
+
+    face_mapping = {
+        [4 3 1 2];  % Boden
+        [1 3 4 2];  % Rechte Wand
+        [3 1 2 4];  % Linke Wand
+        [3 4 2 1];  % Rueckwand
+        [4 3 1 2];  % Decke
+    };
+
+    % Schneide, transformiere und speichere jedes Segment
+    for i = 1:length(segments)
+        % Definiere die Ausgangspunkte (Eckpunkte des Trapezes)
+        source_points = segments{i};
+        
+        % Definiere die Zielpunkte (Eckpunkte des Rechtecks)
+        output_width_and_height_for_item = [round(output_width_and_height{i}(1)); round(output_width_and_height{i}(2))];
+        dest_points = [
+            0, 0;
+            output_width_and_height_for_item(1), 0;
+            output_width_and_height_for_item(1), output_width_and_height_for_item(2);
+            0, output_width_and_height_for_item(2)
+        ];
+
+        new_dest_points = zeros(size(dest_points));
+        for j = 1:4
+            new_dest_points(face_mapping{i}(j), :) = dest_points(j,:);
+        end
+
+        % Berechne die Transformationsmatrix
+        tform = fitgeotrans(source_points, dest_points, 'projective');
+        
+        % Wende die Transformation an
+        transformed_img = imwarp(img, tform, 'OutputView', imref2d([output_width_and_height_for_item(2) output_width_and_height_for_item(1)]));
+        
+        % Speichere das gespiegelte Bild
+        transformed_segment_images{i} = transformed_img;
+    end
+    
+    transformed_segment_images{1} = flip(transformed_segment_images{1}, 2);
+    transformed_segment_images{3} = flip(transformed_segment_images{3}, 2);
+    transformed_segment_images{4} = imrotate(transformed_segment_images{4}, 270);
+    transformed_segment_images{5} = imrotate(transformed_segment_images{5}, 270);
+    transformed_segment_images{5} = flip(transformed_segment_images{5}, 1);
+    % Drehe das Bild fuer das 5. Polygon um 270 Grad
+    
+    % Spiegele das vierte Bild horizontal
+    %transformed_segment_images{4} = flip(transformed_segment_images{4}, 1);
+    
+    % Zeige die transformierten Segmente auf den Polygonen an
+    vertices = threed_points.';
+
+    % Tausche die x- und z-Koordinaten
+    vertices = vertices(:, [1, 3, 2]);
+
+    % Definiere die Fluechen (jede Zelle beschreibt eine Flueche unter Verwendung der Indizes der Eckpunkte)
+    faces = {
+        [2 1 8 6];       % Boden
+        [3 1 11 5];      % Rechte Wand
+        [4 2 9 7];       % Linke Wand
+        [2 1 4 3];       % Rueckwand
+        [3 4 12 10];     % Decke
+    };
+
+    % Definiere die Zuordnung der transformierten Bilder zu den Fluechen
+    image_to_face_mapping = [1, 2, 3, 4, 5]; 
+
+    % Erstelle das Patch-Objekt mit Texturabbildung
+    ax = getappdata(fig, 'BackgroundAxes');
+
+    % Camera parameters for animation
+    camera_position = [0, 0, -1000];
+    view_angle = 30;
+
+    % Clear the axes and plot the initial view
+    cla(ax);
+    
+    hold(ax, 'on');
+
+    for i = 1:length(faces)
+        % Hole die Eckpunkte fuer die aktuelle Flueche
+        face_vertices = vertices(faces{i}, :);
+        
+        % Erstelle eine Oberflueche fuer die aktuelle Flueche
+        x = face_vertices(:, 1);
+        y = face_vertices(:, 2);
+        z = face_vertices(:, 3);
+        
+        % Forme die Eckpunkte um, um eine Oberflueche zu bilden
+        x = reshape(x, [2, 2]);
+        y = reshape(y, [2, 2]);
+        z = reshape(z, [2, 2]);
+        
+        % Hole das zugeordnete Bild fuer die aktuelle Flueche
+        img_index = image_to_face_mapping(i);
+        img_to_use = transformed_segment_images{img_index};
+        
+        % Erstelle die Oberflueche mit der Textur des transformierten Segmentbildes
+        surface(ax, x, y, z, 'FaceColor', 'texturemap', 'CData', img_to_use, 'EdgeColor', 'none');
+    end
+    
+    %campos(ax, camera_position);
+    %camva(ax, view_angle);
+    hold(ax, 'off');
+
+    % Enable 3D rotation for navigation
+    rotate3d(ax, 'on');
+
 end
