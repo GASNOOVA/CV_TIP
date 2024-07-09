@@ -27,6 +27,9 @@ function main
     % Start animation button (bottom right corner)
     uibutton(fig, 'Position', [600, 570, 190, 20], 'Text', 'Tour into the Picture!', 'ButtonPushedFcn', @(btn, event) startAnimation(fig));
 
+    % Reset button
+    uibutton(fig, 'Position', [600, 10, 100, 30], 'Text', 'Reset', 'ButtonPushedFcn', @(btn, event) resetApp(fig));
+    
     % Axes for displaying the image and animation
     axBackground = uiaxes(fig, 'Position', [10, 10, 540, 550]); % Adjusted size to accommodate the button
     setappdata(fig, 'BackgroundAxes', axBackground);
@@ -513,4 +516,20 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     axis(ax, 'vis3d');
     zoom(ax, "on");
     rotate3d(ax, 'on');
+end
+%% Reset Function
+function resetApp(fig)
+    % Clear all app data
+    rmappdata(fig, 'Image');
+    rmappdata(fig, 'VanishingPoint');
+    rmappdata(fig, 'InnerRectangle');
+    rmappdata(fig, 'VanishingPointHandle');
+    rmappdata(fig, 'MeshLines');
+    rmappdata(fig, 'RectangleHandle');
+    
+    % Close the figure
+    delete(fig);
+    
+    % Re-open the GUI
+    main;
 end
