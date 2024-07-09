@@ -44,7 +44,7 @@ function main
     setappdata(fig, 'RectangleHandle', []); % Store handle for inner rectangle
 end
 
-%% load Image
+%% 1.Load Image
 function loadImage(fig)
     [file, path] = uigetfile({'*.jpg;*.png'}, 'Select an Image');
     if isequal(file, 0)
@@ -54,13 +54,14 @@ function loadImage(fig)
     setappdata(fig, 'Image', img);
     axBackground = getappdata(fig, 'BackgroundAxes');
     imshow(img, 'Parent', axBackground);
+
     % Adjust the axis properties to fit the image
     axis(axBackground, 'image');
     axBackground.XTick = [];
     axBackground.YTick = [];
 end
 
-%% get the foreground objects
+%% 2.Separate the Foreground and Background
 function selectForeground(fig)
     axBackground = getappdata(fig, 'BackgroundAxes');
     axForeground = getappdata(fig, 'ForegroundAxes');
@@ -76,6 +77,14 @@ function selectForeground(fig)
     compositeBackground = img;
     % Initialize the foreground image as fully transparent (all zeros)
     foregroundImage = zeros(size(img), 'like', img);
+
+    % 检查foregroundPositions是否已初始化
+    if isappdata(fig, 'ForegroundPositions')
+        foregroundPositions = getappdata(fig, 'ForegroundPositions');
+    else
+        foregroundPositions = [];  % 初始化为空矩阵
+        setappdata(fig, 'ForegroundPositions', foregroundPositions);
+    end
     
     finished = false;
     while ~finished
@@ -99,6 +108,10 @@ function selectForeground(fig)
                 compositeBackground(:,:,k) = regionfill(compositeBackground(:,:,k), mask);
             end
 
+            % Calculate Foreground Position
+            props = regionprops(mask, 'Centroid');
+            foregroundPositions(end+1, :) = props.Centroid;
+
             % Display updated foreground and background
             imshow(foregroundImage, 'Parent', axForeground);
             imshow(compositeBackground, 'Parent', axBackground);
@@ -116,9 +129,11 @@ function selectForeground(fig)
     setappdata(fig, 'Image', compositeBackground);
     setappdata(fig, 'Masks', masks);
     setappdata(fig, 'ForegroundImage', foregroundImage);
+    setappdata(fig, 'ForegroundPositions', foregroundPositions);  % 存储更新的前景位置信息
 end
 
-%% get the vanishing point
+%% 3.Determine the Vanishing Point and Inner Rectangle
+% 3.1 Determine Vanishing Point
 function selectVanishingPoint(fig)
     ax = getappdata(fig, 'BackgroundAxes');
     img = getappdata(fig, 'Image');
@@ -163,7 +178,7 @@ function removeExistingVanishingPoint(fig)
     end
 end
 
-%% get the inner Rectangle
+% 3.2 Determine the inner Rectangle
 function drawInnerRectangle(fig)
     ax = getappdata(fig, 'BackgroundAxes');
     img = getappdata(fig, 'Image');
@@ -196,21 +211,21 @@ function removeExistingRectangle(fig)
     end
 end
 
-%% draw prespective Lines
+% 3.3 Draw prespective Lines
 function drawMeshLines(fig, ax, vanishingPoint)
-    % clear old mesh lines
+    % Clear old mesh lines
     oldMeshLines = getappdata(fig, 'MeshLines');
     if ~isempty(oldMeshLines)
         delete(oldMeshLines);
     end
 
-    % get inner rectangle
+    % Get inner rectangle
     innerRectangle = getappdata(fig, 'InnerRectangle');
     if isempty(innerRectangle)
         return;
     end
     
-    % compute corners of the inner rectangle
+    % Compute corners of the inner rectangle
     rect_x = innerRectangle(1);
     rect_y = innerRectangle(2);
     rect_w = innerRectangle(3);
@@ -226,7 +241,7 @@ function drawMeshLines(fig, ax, vanishingPoint)
     imgHeight = size(img, 1);
     imgWidth = size(img, 2);
 
-    % draw the prespective lines
+    % Draw the prespective lines
     hold(ax, 'on');
     meshLines = gobjects(4, 1);
     for i = 1:size(corners, 1)
@@ -264,7 +279,7 @@ function [x_inter, y_inter] = getBoundaryIntersections(vp_x, vp_y, corner_x, cor
     end
 end
 
-%% Tour into the Picture
+%% 4.Compute prespective Transformation
 function startAnimation(fig)
     img = getappdata(fig, 'Image');
     vanishingPoint = getappdata(fig, 'VanishingPoint');
@@ -275,7 +290,7 @@ function startAnimation(fig)
         return;
     end
 
-    % Create spidery mesh based on inner rectangle and vanishing point
+    % Coordinates of the inner rectangle and vanishing point
     rect_x = innerRectangle(1);
     rect_y = innerRectangle(2);
     rect_w = innerRectangle(3);
@@ -283,19 +298,20 @@ function startAnimation(fig)
     vanishing_x = vanishingPoint(1);
     vanishing_y = vanishingPoint(2);
 
+    % Calculate vectors from vanishing point to the corners of the inner rectangle
     rectangle_x = [rect_x; rect_x+rect_w; rect_x+rect_w; rect_x];
     rectangle_y = [rect_y; rect_y; rect_y+rect_h; rect_y+rect_h];
 
-    animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_x, vanishing_y);
+    prespectiveTransform(fig, img, rectangle_x, rectangle_y, vanishing_x, vanishing_y);
 end
 
-
-function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanishing_point_y)
-    
+% 4.1 Calculate the prespective transformed 3D-Points to construct 3D-Scene
+function prespectiveTransform(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanishing_point_y)
+    % Determine the size of the image to set boundaries for intersections
     end_x = size(img, 2);
     end_y = size(img, 1);
     
-    % Berechnung zu der inner rectangle
+    % Calculate vectors from the vanishing point to each corner of the rectangle
     vector_top_left = [rectangle_x(1)-vanishing_point_x; rectangle_y(1)-vanishing_point_y];
     vector_top_right = [rectangle_x(2)-vanishing_point_x; rectangle_y(2)-vanishing_point_y];
     vector_bottom_right = [rectangle_x(3)-vanishing_point_x; rectangle_y(3)-vanishing_point_y];
@@ -303,7 +319,7 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     
     vanishing_point = [vanishing_point_x; vanishing_point_y];
     
-    % Schnittpunkte mit den Bildrändern
+    % Calculate intersections of these vectors with the image borders
     intersection_tl_left = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [0; 1]);
     intersection_tl_top = intersection_with_image_border(vanishing_point, vector_top_left, [0; 0], [1; 0]);
     
@@ -318,108 +334,110 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     
     intersections = [intersection_tl_left, intersection_tl_top, intersection_tr_right, intersection_tr_top, intersection_br_right, intersection_br_bottom, intersection_bl_left, intersection_bl_bottom];
     
-    % Start with the bottom corners
-    threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
-    threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
-    
-    % calculate the height based on the rectangle points (minimum)
+    % Calculate the height based on the minimal distance between top and bottom intersections
     height = minDistance([rectangle_x(1); rectangle_y(1)], [rectangle_x(4); rectangle_y(4)], [rectangle_x(2); rectangle_y(2)], [rectangle_x(3); rectangle_y(3)]);
     
-    % calculate the top rectangle corners in 3D
+    % Use the intersections and height to create 3D points that represent the rectangle in 3D space
+    threed_rectangle_bottom_left = [rectangle_x(4); 0; rectangle_y(4)];
+    threed_rectangle_bottom_right = [rectangle_x(3); 0; rectangle_y(3)];
     threed_rectangle_top_left = [threed_rectangle_bottom_left(1); height; threed_rectangle_bottom_left(3)];
     threed_rectangle_top_right = [threed_rectangle_bottom_right(1); height; threed_rectangle_bottom_right(3)];
     
-    % get the distances of the side layers
+    % Calculate distances for additional 3D positioning based on intersections and rectangle geometry
     distance_bottom = minDistance([intersection_br_bottom(1); intersection_br_bottom(2)], [rectangle_x(3); rectangle_y(3)], [intersection_bl_bottom(1); intersection_bl_bottom(2)], [rectangle_x(4); rectangle_y(4)]);
     distance_top = minDistance([intersection_tr_top(1); intersection_tr_top(2)], [rectangle_x(2); rectangle_y(2)], [intersection_tl_top(1); intersection_tl_top(2)], [rectangle_x(1); rectangle_y(1)]);
     distance_left = minDistance([intersection_tl_left(1); intersection_tl_left(2)], [rectangle_x(1); rectangle_y(1)],[intersection_bl_left(1); intersection_bl_left(2)], [rectangle_x(4); rectangle_y(4)]);
     distance_right = minDistance([intersection_tr_right(1); intersection_tr_right(2)], [rectangle_x(2); rectangle_y(2)],[intersection_br_right(1); intersection_br_right(2)], [rectangle_x(3); rectangle_y(3)]);
     
-    % calculate left corners
+    % Calculate 90-degree points to help form the full 3D perspective of the rectangle
     threed_intersection_tl_left = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
     threed_intersection_bl_left = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_left);
     
-    % calculate right corners
     threed_intersection_tr_right = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
     threed_intersection_br_right = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_right);
     
-    % calculate top corners
     threed_intersection_tl_top = ninetyDegreePoint(threed_rectangle_top_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
     threed_intersection_tr_top = ninetyDegreePoint(threed_rectangle_top_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_top);
     
-    % calculate bottom corners
     threed_intersection_bl_bottom = ninetyDegreePoint(threed_rectangle_bottom_left, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
     threed_intersection_br_bottom = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
     
-    
+    % Combine all 3D points into a single array for visualization
     threed_points = [threed_rectangle_bottom_right, threed_rectangle_bottom_left, threed_rectangle_top_right, threed_rectangle_top_left, threed_intersection_br_right, threed_intersection_br_bottom, threed_intersection_bl_left, threed_intersection_bl_bottom, threed_intersection_tl_left, threed_intersection_tl_top, threed_intersection_tr_right, threed_intersection_tr_top];
     
+    % Display the transformed segments in the GUI, representing the 3D perspective
     displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections);
 end
 
+% Calculate intersection of the vanishing point vectors with the image border
 function intersection_with_border = intersection_with_image_border(vanishing_point, direction, border_point, border_direction)
+    % Construct the system of equations
     A = [direction(:), -border_direction(:)];
     b = border_point(:) - vanishing_point(:);
     
+    % Solve the system of linear equations
     t = A \ b;
     
+    % Calculate the intersection point
     intersection_with_border = vanishing_point + t(1) * direction;
 end
 
+% Calculate the Euclidean distance between two points projected onto vectors
 function [min_distance] = minDistance(v1, r1, v2, r2)
-    min_distance=min(norm(v1-r1), norm(v2-r2))
+    % v1, r1: The first point and its projection vector
+    % v2, r2: The second point and its projection vector
+    min_distance = min(norm(v1-r1), norm(v2-r2));
 end
 
+% Calculate a new point at a distance from a starting point in a direction 
+% rotated 90 degrees from the original direction
 function [point] = ninetyDegreePoint(startingPoint, originalDirection, distance)
-    % calculate ninety 
-    unitOriginalDirection = originalDirection / norm(originalDirection)
-    newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance
-    point = startingPoint + newDirection
+    % Normalize the original direction vector to get a unit vector
+    unitOriginalDirection = originalDirection / norm(originalDirection);
+
+    % Rotate the direction vector by 90 degrees in the plane; here assumed a rotation
+    % in 3D by swapping and negating coordinates to achieve orthogonality
+    newDirection = [-unitOriginalDirection(3); unitOriginalDirection(2); unitOriginalDirection(1)] * distance;
+    
+    % Calculate the new point by adding the rotated direction vector to the starting point
+    point = startingPoint + newDirection;
 end
 
-
-function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections)
-    % Trenne die Mittelpunkte und Randpunkte aus der Intersections-Matrix
-    center_points = [rectangle_x rectangle_y];
+%% 5.Display the 3D-Scene in the GUI
+function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections)  
+    % Retrieve center points of the rectangle
+    center_points = [rectangle_x rectangle_y];  % Defines the center of the projection area
     
-    % Definiere die Polygon-Eckpunkte fuer jedes Segment
+    % Define the polygon vertices for each segment
     segments = {
-        [intersections(:,8)'; center_points(4,:); center_points(3,:); intersections(:,6)']; % bottom
-        [center_points(2,:); intersections(:,3)'; intersections(:,5)'; center_points(3,:)]; % right
-        [intersections(:,1)'; center_points(1,:); center_points(4,:); intersections(:,7)']; % left
-        center_points; % back
-        [intersections(:,2)'; intersections(:,4)'; center_points(2,:); center_points(1,:)]; % top
+        [intersections(:,8)'; center_points(4,:); center_points(3,:); intersections(:,6)']; % bottom face
+        [center_points(2,:); intersections(:,3)'; intersections(:,5)'; center_points(3,:)]; % right face
+        [intersections(:,1)'; center_points(1,:); center_points(4,:); intersections(:,7)']; % left face
+        center_points; % back face
+        [intersections(:,2)'; intersections(:,4)'; center_points(2,:); center_points(1,:)]; % top face
     };
 
+    % % Define the output width and height for each transformed segment
     output_width_and_height = {
         [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(3,6)-threed_points(3,1))]; % bottom
         [norm(threed_points(3,5)-threed_points(3,1)); norm(threed_points(2,1)-threed_points(2,3))]; % right
         [norm(threed_points(3,7)-threed_points(3,2)); norm(threed_points(2,1)-threed_points(2,3))]; % left
         [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(2,1)-threed_points(2,3))]; % back
         [norm(threed_points(1,2)-threed_points(1,1)); norm(threed_points(3,3)-threed_points(3,11))]; % top
-        
     };
 
-    % Initialisiere Zellarray zur Speicherung jedes transformierten Segmentbildes
+    % Initialize an array to store each transformed segment image
     transformed_segment_images = cell(length(segments), 1);
+    %transformed_foreground_images = cell(length(segments), 1);
 
-    % Grueuee des rechteckigen Ausgabebildes 
-
-    face_mapping = {
-        [4 3 1 2];       % Boden
-        [1 3 4 2];      % Rechte Wand
-        [3 1 2 4];       % Linke Wand
-        [3 4 2 1];       % Rueckwand
-        [4 3 1 2];     % Decke
-    };
-
-    % Schneide, transformiere und speichere jedes Segment
+    % Process each segment for background and foreground transformations
     for i = 1:length(segments)
-        % Definiere die Ausgangspunkte (Eckpunkte des Trapezes)
+        % Background
+        % Define the source points (corners of the trapezoid)
         source_points = segments{i};
         
-        % Definiere die Zielpunkte (Eckpunkte des Rechtecks)
-        output_width_and_height_for_item = [round(output_width_and_height{i}(1)); round(output_width_and_height{i}(2))]
+        % Define the destination points (corners of the rectangle)
+        output_width_and_height_for_item = [round(output_width_and_height{i}(1)); round(output_width_and_height{i}(2))];
         dest_points = [
             0, 0;
             output_width_and_height_for_item(1), 0;
@@ -427,36 +445,22 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
             0, output_width_and_height_for_item(2)
         ];
 
-        new_dest_points = zeros(size(dest_points))
-        for j = 1:4
-            new_dest_points(face_mapping{i}(j), :) = dest_points(j,:);
-        end
-
-        % Berechne die Transformationsmatrix
+        % Calculate the transformation of Background
         tform = fitgeotrans(source_points, dest_points, 'projective');
         
-        % Wende die Transformation an
+        % Apply the transformation to the Background
         transformed_img = imwarp(img, tform, 'OutputView', imref2d([output_width_and_height_for_item(2) output_width_and_height_for_item(1)]));
         
-        % Spiegele das transformierte Bild horizontal
-        %if i==2 || i==4
-        %    transformed_img = flip(transformed_img, 2);
-        %end
-        
-        % Speichere das gespiegelte Bild
+        % Store the transformed image
         transformed_segment_images{i} = transformed_img;
     end
-
     
-    transformed_segment_images{1} = flip(transformed_segment_images{1}, 2)
-    transformed_segment_images{3} = flip(transformed_segment_images{3}, 2)
+    transformed_segment_images{1} = flip(transformed_segment_images{1}, 2);
+    transformed_segment_images{3} = flip(transformed_segment_images{3}, 2);
     transformed_segment_images{4} = imrotate(transformed_segment_images{4}, 270);
     transformed_segment_images{5} = imrotate(transformed_segment_images{5}, 270);
     transformed_segment_images{5} = flip(transformed_segment_images{5}, 1);
     % Drehe das Bild fuer das 5. Polygon um 270 Grad
-    
-    % Spiegele das vierte Bild horizontal
-    %transformed_segment_images{4} = flip(transformed_segment_images{4}, 1);
     
     % Zeige die transformierten Segmente auf den Polygonen an
     vertices = threed_points.';
@@ -472,58 +476,151 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         [2 1 4 3];       % Rueckwand
         [3 4 12 10];     % Decke
     };
-    %{
-    faces = {
-        [2 1 6 8];       % Boden
-        [3 11 5 1];      % Rechte Wand
-        [9 4 2 7];       % Linke Wand
-        [4 3 1 2];       % Rueckwand
-        [10 12 3 4];     % Decke
-    };
-    %}
 
     % Definiere die Zuordnung der transformierten Bilder zu den Fluechen
-    image_to_face_mapping = [1, 2, 3, 4, 5]; 
+    image_to_face_mapping = [1, 2, 3, 4, 5];
 
-    % Erstelle das Patch-Objekt mit Texturabbildung
+    % Set axes properties for 3D display
     ax = getappdata(fig, 'BackgroundAxes');
-
-    % Clear the axes and plot the initial view
     cla(ax);
-    
     hold(ax, 'on');
-    ax.Clipping = 'off';
-    ax.SortMethod = 'childorder';
 
-    for i = 1:length(faces)
-        % Hole die Eckpunkte fuer die aktuelle Flueche
+    % Draw the transformed segments on the respective polygon surfaces
+    for i = 1:length(segments)
+        % Retrieve vertices for the current face
         face_vertices = vertices(faces{i}, :);
-        
-        % Erstelle eine Oberflueche fuer die aktuelle Flueche
-        x = face_vertices(:, 1);
-        y = face_vertices(:, 2);
-        z = face_vertices(:, 3);
-        
-        % Forme die Eckpunkte um, um eine Oberflueche zu bilden
-        x = reshape(x, [2, 2]);
-        y = reshape(y, [2, 2]);
-        z = reshape(z, [2, 2]);
-        
-        % Hole das zugeordnete Bild fuer die aktuelle Flueche
+
+        % Convert face vertices to form a surface
+        x = reshape(face_vertices(:, 1), [2, 2]);
+        y = reshape(face_vertices(:, 2), [2, 2]);
+        z = reshape(face_vertices(:, 3), [2, 2]);
+
+        % Retrieve the associated image for the current face
         img_index = image_to_face_mapping(i);
         img_to_use = transformed_segment_images{img_index};
-        
-        % Erstelle die Oberflueche mit der Textur des transformierten Segmentbildes
-        surface(ax, x, y, z, 'FaceColor', 'texturemap', 'CData', img_to_use, 'EdgeColor', 'none');
-    end
-    
-    %campos(ax, camera_position);
-    %camva(ax, 90);
-    hold(ax, 'off');
 
-    % Enable 3D rotation for navigation
-    view(ax, 0, 0);
-    axis(ax, 'vis3d');
-    zoom(ax, "on");
+        % Create the surface with the texture of the transformed segment image
+        surface(ax, x, y, z, 'FaceColor', 'texturemap', 'CData', img_to_use, 'EdgeColor', 'none'); 
+    end
+
+    hold(ax, 'off');
     rotate3d(ax, 'on');
+    axis(ax, 'vis3d');
+    view(ax, 3);
+end
+
+function [img, alpha, coord] = projectForeground(fig, threed_points, intersections, rectangle_x, rectangle_y)
+    foregroundImage = getappdata(fig, 'ForegroundImage');
+    lowest_coord = getLowestPixel(foregroundImage)
+
+    distance_bottom = minDistance([intersections(6, 1); intersections(6, 2)], [rectangle_x(3); rectangle_y(3)], [intersections(8, 1); intersections(8, 2)], [rectangle_x(4); rectangle_y(4)]);
+    depth = get_foreground_depth_coord_3d(img, rectangle_y(4), distance_bottom, lowest_coord)
+
+    
+    foregroundImage = foregroundImage(1:lowest_coord+1, :)
+    rectangle_y_foreground = rectangle_y + (size(foregroundImage,1)-rectangle_y(4))
+    foregroundImage = foregroundImage(rectangle_y(1):rectangle_y(4), rectangle_x(1):rectangle_x(2))
+
+    foreground_image_left = ninetyDegreePoint(threed_points(:,2), threed_points(:,3)-threed_points(:,4), depth);
+
+    foreground_image_top_left = foreground_image_left + [0; threed_points(2,4)-threed_points(2,2); 0];
+
+    foreground_image_bottom_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); 0; 0];
+
+    foreground_image_top_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); threed_rectangle_top_left(2)-threed_rectangle_bottom_left(2); 0];
+       
+    alpha = ones(size(img, 1), size(img, 2));
+    alpha(img(:,:,1) == 0 & img(:,:,2) == 0 & img(:,:,3) == 0) = 0;
+end
+
+function lowest_coord = getLowestPixel(img)
+    [rows, cols] = find(img ~= 0);
+    [lowest_coord, idx] = max(rows);
+end
+
+function depth = get_foreground_depth_coord_3d(img, rectangle_bottom_left_y, distance_bottom, lowest_coord)
+    max_dist = size(img,1)-rectangle_bottom_left;
+    depth = lowest_coord/max_dist * distance_bottom
+end
+
+function plane = defineProjectionPlane(innerRectangle, vanishingPoint, foregroundPosition)
+    % Calculate the vertical depth relative to the inner rectangle
+
+    % Assume the plane needs to be at the back wall, depth on the z-axis is 0 (adjusted for swapped axes)
+    plane.corners = [
+        innerRectangle(1), 0, innerRectangle(2);  % Use z = innerRectangle(2) to adapt to the swapped coordinate system
+        innerRectangle(1) + innerRectangle(3), 0, innerRectangle(2);
+        innerRectangle(1) + innerRectangle(3), 0, innerRectangle(2) + innerRectangle(4);
+        innerRectangle(1), 0, innerRectangle(2) + innerRectangle(4)
+    ];
+    
+    % Use the vanishing point and foreground position to determine projection depth
+    % depth = calculateDepth(vanishingPoint, innerRectangle, foregroundPosition);
+    depth = 0;  % Placeholder for depth calculation
+    disp('Foreground depth:');
+    disp(depth);
+end
+
+function drawProjectionPlane(fig, plane)
+    ax = getappdata(fig, 'BackgroundAxes');
+    corners = plane.corners;
+
+    % Draw an unfilled polygon to represent the projection plane
+    hold(ax, 'on');
+    % Ensure the plane is closed
+    cornersExtended = [corners; corners(1,:)];  % Add the first point to the end to ensure closure
+    % Draw the polygon, use plot3 to adapt to the 3D scene
+    plot3(ax, cornersExtended(:,3), cornersExtended(:,2), -cornersExtended(:,1), 'r-', 'LineWidth', 2);  % Adjust y and z to fit the 3D scene's coordinate system
+    hold(ax, 'off');
+    drawnow;  % Ensure the drawing updates immediately
+end
+
+function projectForegroundToPlane(fig, foregroundImage, plane)
+    ax = getappdata(fig, 'BackgroundAxes');
+
+    % Retrieve the corner coordinates of the plane
+    corners = plane.corners;
+
+    % Define the source points of the corners of the foreground image
+    sourcePoints = [1, 1; size(foregroundImage, 2), 1; size(foregroundImage, 2), size(foregroundImage, 1); 1, size(foregroundImage, 1)];
+    destPoints = corners(:, 1:2);  % Only use x and y as destination points
+
+    % Create the transformation matrix
+    tform = fitgeotrans(sourcePoints, destPoints, 'projective');
+    
+    % Calculate the dimensions of the transformed output image, ensuring integer values
+    outputHeight = round(max(destPoints(:,2)) - min(destPoints(:,2)));
+    outputWidth = round(max(destPoints(:,1)) - min(destPoints(:,1)));
+
+    % Create a reference object for the output view
+    outputView = imref2d([outputHeight, outputWidth]);
+
+    % Apply the transformation
+    warpedImage = imwarp(foregroundImage, tform, 'OutputView', outputView);
+    
+    % Maintain the current content of Axes
+    hold(ax, 'on');
+
+    % Draw the transformed foreground image
+    h = imagesc(ax, [min(destPoints(:,1)), max(destPoints(:,1))], [min(destPoints(:,2)), max(destPoints(:,2))], warpedImage);
+
+    % Set transparency, adjust as necessary
+    set(h, 'AlphaData', ~all(warpedImage == 0, 3));
+
+    % Preserve the current view
+    hold(ax, 'off');
+end
+
+function depth = calculateDepth(vanishingPoint, innerRectangle, foregroundPosition)
+    % Determine the projection depth based on the vanishing point and foreground position
+    % This is a simplified calculation; adjust the logic for depth calculation as necessary
+    
+    % For example, depth can be estimated based on the vertical distance from the vanishing point to the foreground position
+    % Simplified here as the vertical distance from the vanishing point to the center of the inner rectangle plus an adjustment factor based on the foreground position
+    rectCenterY = innerRectangle(2) + innerRectangle(4) / 2;
+    depthFactor = abs(vanishingPoint(2) - rectCenterY);  % Vertical distance from the vanishing point to the center of the rectangle
+    foregroundAdjustment = abs(foregroundPosition(2) - rectCenterY);  % Adjustment based on the foreground position
+
+    % Calculate the final depth
+    depth = depthFactor + foregroundAdjustment / 2;  % Simple weighted adjustment
 end

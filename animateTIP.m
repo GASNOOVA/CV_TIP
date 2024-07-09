@@ -59,7 +59,20 @@ function animateTIP(fig, img, rectangle_x, rectangle_y, vanishing_point_x, vanis
     threed_intersection_br_bottom = ninetyDegreePoint(threed_rectangle_bottom_right, threed_rectangle_top_right-threed_rectangle_top_left, distance_bottom);
     
     
-    threed_points = [threed_rectangle_bottom_right, threed_rectangle_bottom_left, threed_rectangle_top_right, threed_rectangle_top_left, threed_intersection_br_right, threed_intersection_br_bottom, threed_intersection_bl_left, threed_intersection_bl_bottom, threed_intersection_tl_left, threed_intersection_tl_top, threed_intersection_tr_right, threed_intersection_tr_top];
+    threed_points = [
+        threed_rectangle_bottom_right, %1
+        threed_rectangle_bottom_left, %2
+        threed_rectangle_top_right, %3
+        threed_rectangle_top_left, %4
+        threed_intersection_br_right, %5
+        threed_intersection_br_bottom, %6
+        threed_intersection_bl_left, %7
+        threed_intersection_bl_bottom, %8
+        threed_intersection_tl_left, %9
+        threed_intersection_tl_top, %10
+        threed_intersection_tr_right, %11
+        threed_intersection_tr_top %12
+    ];
     
     displayTransformedSegments(fig, img, threed_points, rectangle_x, rectangle_y, intersections);
 end

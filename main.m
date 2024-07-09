@@ -13,7 +13,7 @@ function main
     uibutton(fig, 'Position', [10, 570, 100, 20], 'Text', 'Load Image', 'ButtonPushedFcn', @(btn, event) loadImage(fig));
     
     % Extruct foreground objects
-    uibutton(fig, 'Position', [120, 570, 150, 20], 'Text', 'Select Foreground', 'ButtonPushedFcn', @(btn, event) selectForeground(fig));
+    %uibutton(fig, 'Position', [120, 570, 150, 20], 'Text', 'Select Foreground', 'ButtonPushedFcn', @(btn, event) selectForeground(fig));
     
     % Select vanishing point button
     uibutton(fig, 'Position', [280, 570, 150, 20], 'Text', 'Select Vanishingpoint', 'ButtonPushedFcn', @(btn, event) selectVanishingPoint(fig));
@@ -195,8 +195,9 @@ function drawInnerRectangle(fig)
     rect = drawrectangle(ax, 'Color', 'g', 'LineWidth', 2);
     addlistener(rect, 'MovingROI', @(src, evt) rectangleMoved(fig, ax, rect));
     addlistener(rect, 'ROIMoved', @(src, evt) rectangleMoved(fig, ax, rect));
-
+    setappdata(fig, 'InnerRectangle', rect.Position);
     setappdata(fig, 'RectangleHandle', rect);
+    drawMeshLines(fig, ax, getappdata(fig, 'VanishingPoint'));
 end
 
 function rectangleMoved(fig, ax, rect)
@@ -502,6 +503,23 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
         % Create the surface with the texture of the transformed segment image
         surface(ax, x, y, z, 'FaceColor', 'texturemap', 'CData', img_to_use, 'EdgeColor', 'none'); 
     end
+    
+    %{
+    [foreground_img, foreground_alpha, foreground_coord] = projectForeground(fig, threed_points, intersections, rectangle_x, rectangle_y)
+
+    % Convert face vertices to form a surface
+    x = reshape(foreground_coord(1,:), [2, 2]);
+    y = reshape(foreground_coord(2,:), [2, 2]);
+    z = reshape(foreground_coord(3,:), [2, 2]);
+
+    % Retrieve the associated image for the current face
+    img_index = image_to_face_mapping(i);
+    img_to_use = transformed_segment_images{img_index};
+
+    % Create the surface with the texture of the transformed segment image
+    surface(ax, x, y, z, 'FaceAlpha', 'texturemap', 'FaceColor', 'texturemap', 'CData', foreground_img, 'AlphaData', foreground_alpha, 'EdgeColor', 'none'); 
+    %}
+
 
     hold(ax, 'off');
     rotate3d(ax, 'on');
@@ -509,25 +527,42 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     view(ax, 3);
 end
 
-function projectForeground(fig)
+function [img, alpha, coords] = projectForeground(fig, threed_points, intersections, rectangle_x, rectangle_y)
     foregroundImage = getappdata(fig, 'ForegroundImage');
-    innerRectangle = getappdata(fig, 'InnerRectangle');
-    vanishingPoint = getappdata(fig, 'VanishingPoint');
-    foregroundPosition = getappdata(fig, 'ForegroundPositions');
+    lowest_coord = getLowestPixel(foregroundImage)
 
-    disp('Foreground Position:');
-    disp(foregroundPosition);
+    distance_bottom = minDistance([intersections(2, 6); intersections(2, 6)], [rectangle_x(3); rectangle_y(3)], [intersections(1, 8); intersections(2, 8)], [rectangle_x(4); rectangle_y(4)]);
+    depth = get_foreground_depth_coord_3d(foregroundImage, rectangle_y(4), distance_bottom, lowest_coord)
 
-    % Define the projection plane
-    plane = defineProjectionPlane(innerRectangle, vanishingPoint, foregroundPosition);
-    disp('Plane Corners:');
-    disp(plane.corners);
+    
+    foregroundImage = foregroundImage(1:lowest_coord+1, :)
+    rectangle_y_foreground = rectangle_y + (size(foregroundImage,1)-rectangle_y(4))
+    foregroundImage = foregroundImage(rectangle_y(1):rectangle_y(4), rectangle_x(1):rectangle_x(2))
 
-    % Draw the projection plane, projection of the foreground is not yet done
-    drawProjectionPlane(fig, plane);
+    foreground_image_left = ninetyDegreePoint(threed_points(:,2), threed_points(:,3)-threed_points(:,4), depth);
 
-    % Project the foreground onto the plane (this line is commented out for now)
-    % projectForegroundToPlane(fig, foregroundImage, plane);
+    foreground_image_top_left = foreground_image_left + [0; threed_points(2,4)-threed_points(2,2); 0];
+
+    foreground_image_bottom_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); 0; 0];
+
+    foreground_image_top_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); threed_points(2,4)-threed_points(2,2); 0];
+
+    coords = [foreground_image_left, foreground_image_bottom_right, foreground_image_top_left, foreground_image_top_right]
+
+    img = foregroundImage
+       
+    alpha = ones(size(img, 1), size(img, 2));
+    alpha(img(:,:,1) == 0) = 0;
+end
+
+function lowest_coord = getLowestPixel(img)
+    [rows, cols] = find(img ~= 0);
+    [lowest_coord, idx] = max(rows);
+end
+
+function depth = get_foreground_depth_coord_3d(img, rectangle_bottom_left_y, distance_bottom, lowest_coord)
+    max_dist = size(img,1)-rectangle_bottom_left_y;
+    depth = lowest_coord/max_dist * distance_bottom
 end
 
 function plane = defineProjectionPlane(innerRectangle, vanishingPoint, foregroundPosition)
