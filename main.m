@@ -13,7 +13,7 @@ function main
     uibutton(fig, 'Position', [10, 570, 100, 20], 'Text', 'Load Image', 'ButtonPushedFcn', @(btn, event) loadImage(fig));
     
     % Extruct foreground objects
-    %uibutton(fig, 'Position', [120, 570, 150, 20], 'Text', 'Select Foreground', 'ButtonPushedFcn', @(btn, event) selectForeground(fig));
+    uibutton(fig, 'Position', [120, 570, 150, 20], 'Text', 'Select Foreground', 'ButtonPushedFcn', @(btn, event) selectForeground(fig));
     
     % Select vanishing point button
     uibutton(fig, 'Position', [280, 570, 150, 20], 'Text', 'Select Vanishingpoint', 'ButtonPushedFcn', @(btn, event) selectVanishingPoint(fig));
@@ -24,6 +24,9 @@ function main
     % Add button to project foreground
     uibutton(fig, 'Position', [600, 540, 150, 20], 'Text', 'Project Foreground', 'ButtonPushedFcn', @(btn, event) projectForeground(fig));
     
+    % Reset button
+    uibutton(fig, 'Position', [600, 10, 100, 30], 'Text', 'Reset', 'ButtonPushedFcn', @(btn, event) resetApp(fig));
+
     % Start animation button (bottom right corner)
     uibutton(fig, 'Position', [600, 570, 190, 20], 'Text', 'Tour into the Picture!', 'ButtonPushedFcn', @(btn, event) startAnimation(fig));
 
@@ -519,7 +522,6 @@ function displayTransformedSegments(fig, img, threed_points, rectangle_x, rectan
     surface(ax, x, y, z, 'FaceAlpha', 'texturemap', 'FaceColor', 'texturemap', 'CData', foreground_img, 'AlphaData', foreground_alpha, 'EdgeColor', 'none'); 
     %}
 
-
     hold(ax, 'off');
     rotate3d(ax, 'on');
     axis(ax, 'vis3d');
@@ -528,27 +530,26 @@ end
 
 function [img, alpha, coords] = projectForeground(fig, threed_points, intersections, rectangle_x, rectangle_y)
     foregroundImage = getappdata(fig, 'ForegroundImage');
-    lowest_coord = getLowestPixel(foregroundImage)
+    lowest_coord = getLowestPixel(foregroundImage);
 
     distance_bottom = minDistance([intersections(2, 6); intersections(2, 6)], [rectangle_x(3); rectangle_y(3)], [intersections(1, 8); intersections(2, 8)], [rectangle_x(4); rectangle_y(4)]);
-    depth = get_foreground_depth_coord_3d(foregroundImage, rectangle_y(4), distance_bottom, lowest_coord)
+    depth = get_foreground_depth_coord_3d(foregroundImage, rectangle_y(4), distance_bottom, lowest_coord);
 
     
-    foregroundImage = foregroundImage(1:lowest_coord+1, :)
-    rectangle_y_foreground = rectangle_y + (size(foregroundImage,1)-rectangle_y(4))
-    foregroundImage = foregroundImage(rectangle_y(1):rectangle_y(4), rectangle_x(1):rectangle_x(2))
+    foregroundImage = foregroundImage(1:lowest_coord+1, :);
+
+    rectangle_y_foreground = rectangle_y + (size(foregroundImage,1)-rectangle_y(4));
+
+    foregroundImage = foregroundImage(rectangle_y(1):rectangle_y(4), rectangle_x(1):rectangle_x(2));
 
     foreground_image_left = ninetyDegreePoint(threed_points(:,2), threed_points(:,3)-threed_points(:,4), depth);
-
     foreground_image_top_left = foreground_image_left + [0; threed_points(2,4)-threed_points(2,2); 0];
-
     foreground_image_bottom_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); 0; 0];
-
     foreground_image_top_right = foreground_image_left + [threed_points(1,3)-threed_points(1,4); threed_points(2,4)-threed_points(2,2); 0];
 
-    coords = [foreground_image_left, foreground_image_bottom_right, foreground_image_top_left, foreground_image_top_right]
+    coords = [foreground_image_left, foreground_image_bottom_right, foreground_image_top_left, foreground_image_top_right];
 
-    img = foregroundImage
+    img = foregroundImage;
        
     alpha = ones(size(img, 1), size(img, 2));
     alpha(img(:,:,1) == 0) = 0;
@@ -561,7 +562,7 @@ end
 
 function depth = get_foreground_depth_coord_3d(img, rectangle_bottom_left_y, distance_bottom, lowest_coord)
     max_dist = size(img,1)-rectangle_bottom_left_y;
-    depth = lowest_coord/max_dist * distance_bottom
+    depth = lowest_coord/max_dist * distance_bottom;
 end
 
 function plane = defineProjectionPlane(innerRectangle, vanishingPoint, foregroundPosition)
@@ -644,4 +645,21 @@ function depth = calculateDepth(vanishingPoint, innerRectangle, foregroundPositi
 
     % Calculate the final depth
     depth = depthFactor + foregroundAdjustment / 2;  % Simple weighted adjustment
+end
+
+%% Reset Function
+function resetApp(fig)
+    % Clear all app data
+    rmappdata(fig, 'Image');
+    rmappdata(fig, 'VanishingPoint');
+    rmappdata(fig, 'InnerRectangle');
+    rmappdata(fig, 'VanishingPointHandle');
+    rmappdata(fig, 'MeshLines');
+    rmappdata(fig, 'RectangleHandle');
+
+    % Close the figure
+    delete(fig);
+
+    % Re-open the GUI
+    main;
 end
